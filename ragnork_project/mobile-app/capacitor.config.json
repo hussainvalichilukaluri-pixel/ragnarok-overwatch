@@ -1,0 +1,17 @@
+{
+  "appId": "com.ragnarok.eseal",
+  "appName": "Ragnarok Overwatch",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  },
+  "server": {
+    "cleartext": true,
+    "allowNavigation": [
+      "192.168.4.1"
+    ]
+  }
+}

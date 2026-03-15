@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ragnarok Global Command</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        :root {
+            --primary: #00e676; --info: #00c6ff; --warning: #ff9500; --danger: #ff3b30;
+            --bg-dark: #0a0a0c; --card-bg: rgba(255, 255, 255, 0.03); 
+            --card-border: rgba(255, 255, 255, 0.08); --text-main: #f0f6fc; --text-muted: #8b949e;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background-color: var(--bg-dark); color: var(--text-main); 
+            margin: 0; padding: 20px; height: 100vh; box-sizing: border-box; overflow: hidden;
+        }
+
+        .bg-glow {
+            position: absolute; width: 600px; height: 600px; 
+            background: radial-gradient(circle, rgba(0,230,118,0.05) 0%, rgba(0,0,0,0) 70%);
+            top: -200px; left: -200px; z-index: -1; border-radius: 50%;
+        }
+
+        .header { text-align: center; margin-bottom: 25px; display: flex; flex-direction: column; align-items: center; }
+        .header h1 { margin: 0; font-size: 2.5rem; font-weight: 800; letter-spacing: 2px; text-shadow: 0 0 20px rgba(0, 230, 118, 0.2); }
+        .header p { color: var(--primary); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 3px; margin-top: 5px; font-weight: 600; }
+
+        .dashboard-grid { 
+            display: grid; grid-template-columns: 400px 1fr; gap: 25px; 
+            max-width: 1600px; margin: 0 auto; height: calc(100vh - 120px); 
+        }
+
+        .fleet-feed { overflow-y: auto; padding-right: 10px; display: flex; flex-direction: column; gap: 15px; }
+        .fleet-feed::-webkit-scrollbar { width: 6px; }
+        .fleet-feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+        .asset-card { 
+            background: var(--card-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border); border-radius: 16px; padding: 20px;
+            border-left: 4px solid var(--text-muted); transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .asset-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; margin-bottom: 12px; }
+        .asset-header h3 { margin: 0; font-size: 1.1rem; letter-spacing: 1px; }
+        .badge { padding: 4px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: bold; letter-spacing: 1px; }
+        
+        .data-row { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: flex-start; }
+        .data-label { color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .data-value { font-size: 0.9rem; font-weight: 500; text-align: right; }
+        
+        .audit-log { font-family: 'Courier New', Courier, monospace; color: #a5d6ff; font-size: 0.75rem; text-align: right; line-height: 1.5; }
+
+        .status-paired { color: var(--info); background: rgba(0, 198, 255, 0.1); border-color: var(--info); }
+        .status-route { color: var(--primary); background: rgba(0, 230, 118, 0.1); border-color: var(--primary); text-shadow: 0 0 10px rgba(0,230,118,0.3); }
+        .status-breach { color: var(--danger); background: rgba(255, 59, 48, 0.1); border-color: var(--danger); animation: alertPulse 1.5s infinite; }
+        .status-complete { color: var(--warning); background: rgba(255, 149, 0, 0.1); border-color: var(--warning); }
+        
+        @keyframes alertPulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        .map-container { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 20px; overflow: hidden; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+        #map { height: 100%; width: 100%; z-index: 1; background: #0a0a0c; }
+        .leaflet-layer, .leaflet-control-zoom-in, .leaflet-control-zoom-out, .leaflet-control-attribution { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+    </style>
+</head>
+<body>
+    <div class="bg-glow"></div>
+    
+    <div class="header">
+        <h1>RAGNAROK OVERWATCH</h1>
+        <p>Encrypted Global Telemetry</p>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="fleet-feed" id="fleetFeed">
+            <div style="text-align:center; color:#8892b0; margin-top: 50px;">Initializing secure connection...</div>
+        </div>
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // ⚠️ ENSURE YOUR FIREBASE KEYS ARE HERE ⚠️
+        const firebaseConfig = {
+             apiKey: XXXXXXXXXXXXX",
+             authDomain: XXXXXXXXXXXXX,
+             databaseURL:XXXXXXXXXXXXX,
+             projectId:XXXXXXXXXXXXX,
+             storageBucket: XXXXXXXXXXXXX,
+             messagingSenderId: XXXXXXXXXXXXX,
+             appId: XXXXXXXXXXXXX,
+             measurementId: XXXXXXXXXXXXX
+          };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        const map = L.map('map').setView([14.4673, 78.8242], 6); 
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+        
+        const fleetMarkers = {}; 
+        const fleetPaths = {}; 
+        const fleetLines = {};  
+        let isFirstLoad = true;
+
+        const fleetRef = ref(db, 'meters');
+        
+        onValue(fleetRef, (snapshot) => {
+            const allMeters = snapshot.val();
+            const feedContainer = document.getElementById('fleetFeed');
+            feedContainer.innerHTML = ''; 
+
+            if (!allMeters) {
+                feedContainer.innerHTML = '<div style="text-align:center; color:#8892b0; margin-top:50px;">No Active Assets Detected.</div>';
+                return;
+            }
+
+            Object.entries(allMeters).forEach(([trackerId, data]) => {
+                
+                // --- TRACE ROUTE LOGIC ---
+                if (data.live_lat && data.live_lng) {
+                    const latLng = [data.live_lat, data.live_lng];
+                    
+                    if (fleetMarkers[trackerId]) {
+                        fleetMarkers[trackerId].setLatLng(latLng);
+                    } else {
+                        fleetMarkers[trackerId] = L.marker(latLng).addTo(map)
+                            .bindPopup(`<b>${data.meter_id || trackerId.toUpperCase()}</b><br>${data.tracking_status || 'Active'}`);
+                        if (isFirstLoad) { map.setView(latLng, 14); isFirstLoad = false; }
+                    }
+
+                    if (!fleetPaths[trackerId]) fleetPaths[trackerId] = [];
+                    
+                    const lastPoint = fleetPaths[trackerId][fleetPaths[trackerId].length - 1];
+                    if (!lastPoint || lastPoint[0] !== latLng[0] || lastPoint[1] !== latLng[1]) {
+                        fleetPaths[trackerId].push(latLng); 
+                    }
+
+                    if (!fleetLines[trackerId]) {
+                        fleetLines[trackerId] = L.polyline(fleetPaths[trackerId], {
+                            color: '#00e676',
+                            weight: 4,
+                            opacity: 0.8,
+                            dashArray: '10, 15', 
+                            lineJoin: 'round'
+                        }).addTo(map); // <--- ALWAYS ADDED TO MAP IMMEDIATELY
+                    } else {
+                        fleetLines[trackerId].setLatLngs(fleetPaths[trackerId]);
+                    }
+                }
+
+                // --- UI CARD LOGIC ---
+                let statusText = 'STANDBY';
+                let statusClass = '';
+                let borderColor = '#8b949e'; 
+                let logHtml = '<span style="color:#8892b0;">AWAITING DETACH...</span>';
+
+                if (data.tracking_status === "PAIRED_SECURE") {
+                    statusText = 'LINKED & PAIRED'; statusClass = 'status-paired'; borderColor = '#00c6ff';
+                } else if (data.tracking_status === "EN_ROUTE") {
+                    statusText = 'IN TRANSIT'; statusClass = 'status-route'; borderColor = '#00e676';
+                } else if (data.tracking_status === "MISSION_COMPLETE") {
+                    if (data.eseal_tampered === true || data.eseal_tampered === "true") {
+                        statusText = 'CRITICAL BREACH'; statusClass = 'status-breach'; borderColor = '#ff3b30';
+                    } else {
+                        statusText = 'SECURE DEBRIEF'; statusClass = 'status-complete'; borderColor = '#ff9500';
+                    }
+                    if (data.hardware_audit_log) {
+                        logHtml = data.hardware_audit_log.replace(/ -> /g, '<br>↓<br>');
+                    }
+                }
+
+                const card = document.createElement('div');
+                card.className = 'asset-card';
+                card.style.borderLeftColor = borderColor;
+                const displayName = data.meter_id ? `🚛 ${data.meter_id}` : `📡 ${trackerId.toUpperCase()}`;
+
+                card.innerHTML = `
+                    <div class="asset-header">
+                        <h3>${displayName}</h3>
+                        <span class="badge ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Mission Stage</span>
+                        <span class="data-value" style="color: ${borderColor}; font-weight: bold;">${data.tracking_status || 'AWAITING PAIRING'}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Live GPS</span>
+                        <span class="data-value" style="font-family:monospace;">${data.live_lat ? data.live_lat.toFixed(5) : '--'}, ${data.live_lng ? data.live_lng.toFixed(5) : '--'}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label" style="margin-top:2px;">Black-Box<br>Audit Log</span>
+                        <span class="data-value audit-log">${logHtml}</span>
+                    </div>
+                `;
+                feedContainer.appendChild(card);
+            });
+        });
+    </script>
+</body>
+</html>
